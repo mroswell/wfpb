@@ -82,7 +82,7 @@ header {
   transition: all 0.2s;
 }
 
-.tnav-btn .tnav-icon { font-size: 1rem; }
+.tnav-icon { font-size: 1rem; }
 
 .tnav-btn.active {
   color: var(--green-dark);
