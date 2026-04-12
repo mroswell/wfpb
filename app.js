@@ -8,6 +8,22 @@ const LS_KEY = 'jumpstart-tracker';
 let state = loadState();
 let currentDay = getTodayDay();
 let currentView = 'day-view';
+let activeTrip = 'all';
+
+const TRIP_LABELS = {
+  week1: [
+    { trip: 'all', label: 'All' },
+    { trip: '1', label: 'Days 1\u20132' },
+    { trip: '2', label: 'Days 3\u20134' },
+    { trip: '3', label: 'Days 5\u20137' }
+  ],
+  week2: [
+    { trip: 'all', label: 'All' },
+    { trip: '1', label: 'Days 8\u20139' },
+    { trip: '2', label: 'Days 10\u201311' },
+    { trip: '3', label: 'Days 12\u201314' }
+  ]
+};
 
 // --- LOCAL STORAGE ---
 function loadState() {
@@ -72,6 +88,16 @@ function initDayNav() {
     pip.addEventListener('click', () => navigateToDay(d));
     nav.appendChild(pip);
   }
+  // Append the date label after pips
+  const dateSpan = document.createElement('span');
+  dateSpan.id = 'header-date';
+  dateSpan.className = 'header-date';
+  const dateObj = getDateForDay(currentDay);
+  const dayLabel = currentDay <= 0 ? `Prep Day ${Math.abs(currentDay) + 1}` : `Day ${currentDay}`;
+  const longDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  dateSpan.textContent = `${dayLabel} is ${longDate}`;
+  nav.appendChild(dateSpan);
+
   // Scroll current into view
   const currentPip = nav.querySelector('.current');
   if (currentPip) currentPip.scrollIntoView({ inline: 'center', behavior: 'smooth' });
@@ -274,12 +300,68 @@ function renderJournal() {
   });
 }
 
+// --- SHOPPING HELPERS ---
+// Build a map from recipe/meal name keywords to the days they appear
+function buildRecipeDayMap() {
+  const map = {};
+  for (let d = 1; d <= 14; d++) {
+    const dayMeals = MEAL_PLAN[d];
+    if (!dayMeals) continue;
+    Object.values(dayMeals).forEach(meal => {
+      if (!meal || !meal.name) return;
+      // Normalize: lowercase, strip common prefixes
+      const name = meal.name.toLowerCase();
+      if (!map[name]) map[name] = [];
+      if (!map[name].includes(d)) map[name].push(d);
+    });
+  }
+  return map;
+}
+
+function formatDayDate(d) {
+  const dateObj = getDateForDay(d);
+  const short = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `Day ${d} (${short})`;
+}
+
+function getPurposeDays(purposeStr, listKey) {
+  if (!purposeStr) return '';
+  const recipeDayMap = buildRecipeDayMap();
+  const matchedDays = new Set();
+
+  // Determine day range based on list key
+  const dayRange = listKey === 'week2' ? [8, 14] : [1, 7];
+
+  // Try to match each comma-separated purpose term against meal names
+  const terms = purposeStr.split(',').map(t => t.trim().toLowerCase());
+  terms.forEach(term => {
+    if (!term || term === 'various recipes' || term === 'snacks' || term === 'breakfast'
+        || term === 'garnish' || term === 'salads' || term === 'bowls'
+        || term === 'breakfast and snacks' || term === 'snacks and desserts'
+        || term === 'breakfast, snacks' || term === 'breakfast, recipes'
+        || term === 'breakfast, snacks, lunches') return;
+    Object.entries(recipeDayMap).forEach(([name, days]) => {
+      // Check if the purpose term appears within the meal name or vice versa
+      if (name.includes(term) || term.includes(name)) {
+        days.forEach(d => {
+          if (d >= dayRange[0] && d <= dayRange[1]) matchedDays.add(d);
+        });
+      }
+    });
+  });
+
+  if (matchedDays.size === 0) return '';
+  const sorted = [...matchedDays].sort((a, b) => a - b);
+  return 'Days ' + sorted.join(', ');
+}
+
 // --- SHOPPING VIEW ---
 function initShoppingView() {
   document.querySelectorAll('#shopping-view .tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('#shopping-view .tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+      activeTrip = 'all';
       renderShoppingList(tab.dataset.shop);
     });
   });
@@ -292,6 +374,24 @@ function renderShoppingList(listKey) {
   const list = SHOPPING[listKey];
   if (!list) return;
 
+  // Render sub-pills for week1/week2
+  const tripLabels = TRIP_LABELS[listKey];
+  if (tripLabels) {
+    const filterBar = document.createElement('div');
+    filterBar.className = 'sub-filter-bar';
+    tripLabels.forEach(({ trip, label }) => {
+      const btn = document.createElement('button');
+      btn.className = 'sub-filter-btn' + (trip === activeTrip ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        activeTrip = trip;
+        renderShoppingList(listKey);
+      });
+      filterBar.appendChild(btn);
+    });
+    container.appendChild(filterBar);
+  }
+
   const shopState = getShopState(listKey);
 
   Object.keys(list).forEach(category => {
@@ -299,16 +399,20 @@ function renderShoppingList(listKey) {
     section.className = 'shop-category';
     section.innerHTML = `<h4>${category}</h4>`;
 
+    let visibleCount = 0;
     list[category].forEach((item, i) => {
+      if (activeTrip !== 'all' && item.trip && String(item.trip) !== activeTrip) return;
+      visibleCount++;
       const id = `${listKey}-${category}-${i}`;
       const bought = shopState[id] || false;
       const row = document.createElement('div');
       row.className = 'shop-item' + (bought ? ' bought' : '');
+      const dayInfo = getPurposeDays(item.purpose, listKey);
       row.innerHTML = `
         <input type="checkbox" id="${id}" ${bought ? 'checked' : ''}>
         <label for="${id}">
           <strong>${item.amount}</strong> ${item.item}
-          ${item.purpose ? `<span class="shop-purpose">For: ${item.purpose}</span>` : ''}
+          ${item.purpose ? `<span class="shop-purpose">For: ${item.purpose}${dayInfo ? ` (${dayInfo})` : ''}</span>` : ''}
         </label>
       `;
       row.querySelector('input').addEventListener('change', (e) => {
@@ -319,7 +423,9 @@ function renderShoppingList(listKey) {
       section.appendChild(row);
     });
 
-    container.appendChild(section);
+    if (visibleCount > 0) {
+      container.appendChild(section);
+    }
   });
 }
 
