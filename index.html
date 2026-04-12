@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jumpstart Daily Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <h1>Jumpstart Tracker</h1>
+      <span class="subtitle">15-Day WFPB Program</span>
+    </div>
+    <nav class="top-nav">
+      <button class="tnav-btn active" data-view="day-view">
+        <span class="tnav-icon">📋</span>
+        <span>Today</span>
+      </button>
+      <button class="tnav-btn" data-view="shopping-view">
+        <span class="tnav-icon">🛒</span>
+        <span>Shop</span>
+      </button>
+      <button class="tnav-btn" data-view="recipes-view">
+        <span class="tnav-icon">📖</span>
+        <span>Recipes</span>
+      </button>
+      <button class="tnav-btn" data-view="guide-view">
+        <span class="tnav-icon">✅</span>
+        <span>Guide</span>
+      </button>
+      <button class="tnav-btn" data-view="progress-view">
+        <span class="tnav-icon">📊</span>
+        <span>Progress</span>
+      </button>
+    </nav>
+    <nav id="day-nav"></nav>
+  </header>
+
+  <main id="app">
+    <!-- DAY VIEW -->
+    <section id="day-view" class="view">
+      <div class="day-header">
+        <button id="prev-day" class="nav-btn">&larr;</button>
+        <div class="day-title-block">
+          <h2 id="day-title"></h2>
+          <p id="day-date" class="day-date"></p>
+          <div id="day-progress-bar" class="progress-bar"><div class="progress-fill"></div></div>
+        </div>
+        <button id="next-day" class="nav-btn">&rarr;</button>
+      </div>
+
+      <!-- Zoom Meeting Alert -->
+      <div id="zoom-alert" class="alert-card hidden">
+        <span class="alert-icon">📹</span>
+        <div id="zoom-alert-text"></div>
+      </div>
+
+      <!-- Prep Tasks -->
+      <div id="prep-section" class="card hidden">
+        <h3>Prep Tasks</h3>
+        <div id="prep-tasks" class="checklist"></div>
+      </div>
+
+      <!-- Daily Reminders -->
+      <div class="card">
+        <h3>Daily Essentials</h3>
+        <div id="daily-essentials" class="checklist"></div>
+      </div>
+
+      <!-- Meals -->
+      <div class="card">
+        <h3>Today's Meals</h3>
+        <div id="meals-section"></div>
+      </div>
+
+      <!-- Food Journal -->
+      <div class="card">
+        <h3>What I Actually Ate</h3>
+        <div id="journal-section">
+          <div class="journal-slot">
+            <label>Breakfast</label>
+            <textarea id="journal-breakfast" placeholder="What did you have?"></textarea>
+          </div>
+          <div class="journal-slot">
+            <label>Morning Snack</label>
+            <textarea id="journal-snack1" placeholder="What did you have?"></textarea>
+          </div>
+          <div class="journal-slot">
+            <label>Lunch</label>
+            <textarea id="journal-lunch" placeholder="What did you have?"></textarea>
+          </div>
+          <div class="journal-slot">
+            <label>Afternoon Snack</label>
+            <textarea id="journal-snack2" placeholder="What did you have?"></textarea>
+          </div>
+          <div class="journal-slot">
+            <label>Dinner</label>
+            <textarea id="journal-dinner" placeholder="What did you have?"></textarea>
+          </div>
+          <div class="journal-slot">
+            <label>Evening Snack</label>
+            <textarea id="journal-snack3" placeholder="What did you have?"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Notes -->
+      <div class="card">
+        <h3>Notes &amp; Reflections</h3>
+        <textarea id="daily-notes" placeholder="How are you feeling? Energy level? Any cravings? What went well?"></textarea>
+      </div>
+    </section>
+
+    <!-- SHOPPING VIEW -->
+    <section id="shopping-view" class="view hidden">
+      <h2>Shopping Lists</h2>
+      <div class="tab-bar">
+        <button class="tab active" data-shop="week1">Week 1</button>
+        <button class="tab" data-shop="week2">Week 2</button>
+        <button class="tab" data-shop="infrastructure">Pantry Staples</button>
+        <button class="tab" data-shop="spices">Herbs &amp; Spices</button>
+      </div>
+      <div id="shopping-list-content"></div>
+    </section>
+
+    <!-- RECIPES VIEW -->
+    <section id="recipes-view" class="view hidden">
+      <h2>Recipe Reference</h2>
+      <div class="tab-bar">
+        <button class="tab active" data-cat="breakfast">Breakfast</button>
+        <button class="tab" data-cat="main">Main Dishes</button>
+        <button class="tab" data-cat="soup">Soups</button>
+        <button class="tab" data-cat="salad">Salads</button>
+        <button class="tab" data-cat="snack">Snacks</button>
+        <button class="tab" data-cat="sauce">Sauces</button>
+        <button class="tab" data-cat="dessert">Desserts</button>
+      </div>
+      <div id="recipe-list"></div>
+      <div id="recipe-detail" class="hidden"></div>
+    </section>
+
+    <!-- FOOD GUIDE VIEW -->
+    <section id="guide-view" class="view hidden">
+      <h2>Food Guide Quick Reference</h2>
+      <div id="food-guide-content"></div>
+    </section>
+
+    <!-- PROGRESS VIEW -->
+    <section id="progress-view" class="view hidden">
+      <h2>My Progress</h2>
+      <div id="progress-content"></div>
+      <div class="card">
+        <h3>Export / Reset</h3>
+        <button id="export-btn" class="btn">Export My Data (JSON)</button>
+        <button id="reset-btn" class="btn btn-danger">Reset All Data</button>
+      </div>
+    </section>
+  </main>
+
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

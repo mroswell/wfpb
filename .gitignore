@@ -1,0 +1,14 @@
+# PDFs
+*.pdf
+
+# Local editor history
+.lh/
+
+# Common editor/OS noise
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# Node (if you ever add dependencies)
+node_modules/
