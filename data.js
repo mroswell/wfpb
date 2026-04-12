@@ -2,7 +2,7 @@
 // JUMPSTART TRACKER - ALL PROGRAM DATA
 // =============================================
 
-const START_DATE = '2026-04-12'; // Day 1
+const START_DATE = '2026-04-11'; // Day 1
 
 // 14-day meal plan (1 person, halved from 2-person plan)
 const MEAL_PLAN = {
@@ -137,10 +137,10 @@ const DAILY_ESSENTIALS = [
 const ZOOM_MEETINGS = {
   '-3': { title: 'Orientation Session', duration: '2 hours', desc: 'Setting up for success: compliant foods, meal planning, shopping, food prep, reading labels, snacks, medical recommendations.' },
   1:    { title: 'Day 1: Launch Session', duration: '2 hours', desc: 'Small group discussions, presentations on food & chronic disease, behavior change, and living on a WFPB diet.' },
-  4:    { title: 'Day 4: Check-In', duration: '1 hour', desc: 'Mid-week check-in with medical facilitator for questions and community support.' },
-  8:    { title: 'Day 8: Virtual Potluck', duration: '2 hours', desc: 'Share a recipe photo with the group! Medical Q&A with facilitator.' },
-  11:   { title: 'Day 11: Check-In', duration: '1 hour', desc: 'Mid-week check-in with medical facilitator.' },
-  15:   { title: 'Day 15: Commencement', duration: '2 hours', desc: 'Complete questionnaires, share results, discuss next steps and transitioning to ongoing WFPB lifestyle.' }
+  5:    { title: 'Day 5: Check-In', duration: '1 hour (6:30–7:30 pm ET)', desc: 'Mid-week check-in with medical facilitator for questions and community support.' },
+  8:    { title: 'Day 8: Virtual Potluck', duration: '2 hours (1:00–3:00 pm ET)', desc: 'Share a recipe photo with the group! Medical Q&A with facilitator.' },
+  12:   { title: 'Day 12: Check-In', duration: '1 hour (6:30–7:30 pm ET)', desc: 'Mid-week check-in with medical facilitator.' },
+  15:   { title: 'Day 15: Results & Next Steps', duration: '2 hours (1:00–3:00 pm ET)', desc: 'Complete questionnaires, share results, discuss next steps and transitioning to ongoing WFPB lifestyle.' }
 };
 
 // Prep tasks for specific days
