@@ -9,6 +9,7 @@ let state = loadState();
 let currentDay = getTodayDay();
 let currentView = 'day-view';
 let activeTrip = 'all';
+let recipeSource = null; // tracks if recipe was opened from day view
 
 const TRIP_LABELS = {
   week1: [
@@ -275,6 +276,7 @@ function renderMeals() {
     if (link) {
       link.addEventListener('click', (e) => {
         e.preventDefault();
+        recipeSource = { view: 'day-view', day: currentDay };
         switchView('recipes-view');
         showRecipeDetail(link.dataset.recipe);
       });
@@ -474,7 +476,8 @@ function showRecipeDetail(recipeId) {
   const detail = document.getElementById('recipe-detail');
   detail.classList.remove('hidden');
 
-  let html = `<span class="back-link" id="recipe-back">&larr; Back to list</span>`;
+  const backLabel = recipeSource ? `\u2190 Back to Day ${recipeSource.day}` : '\u2190 Back to list';
+  let html = `<span class="back-link" id="recipe-back">${backLabel}</span>`;
   html += `<h3>${recipe.name}</h3>`;
   html += `<p><em>Serves ${recipe.serves}</em></p>`;
 
@@ -507,14 +510,21 @@ function showRecipeDetail(recipeId) {
   detail.innerHTML = html;
 
   document.getElementById('recipe-back').addEventListener('click', () => {
-    detail.classList.add('hidden');
-    document.getElementById('recipe-list').classList.remove('hidden');
-    // Activate the right tab
-    const cat = recipe.category;
-    document.querySelectorAll('#recipes-view .tab').forEach(t => {
-      t.classList.toggle('active', t.dataset.cat === cat);
-    });
-    renderRecipeList(cat);
+    if (recipeSource) {
+      const day = recipeSource.day;
+      recipeSource = null;
+      detail.classList.add('hidden');
+      document.getElementById('recipe-list').classList.remove('hidden');
+      navigateToDay(day);
+    } else {
+      detail.classList.add('hidden');
+      document.getElementById('recipe-list').classList.remove('hidden');
+      const cat = recipe.category;
+      document.querySelectorAll('#recipes-view .tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.cat === cat);
+      });
+      renderRecipeList(cat);
+    }
   });
 }
 
