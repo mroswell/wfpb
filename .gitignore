@@ -6,6 +6,7 @@ jumpstart-tracker-data.json
 
 # Local editor history
 .lh/
+.history
 
 # Common editor/OS noise
 .DS_Store

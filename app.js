@@ -38,10 +38,63 @@ function saveState() {
   localStorage.setItem(LS_KEY, JSON.stringify(state));
 }
 
+// Migrate old shopping keys (e.g. "week1-Fresh Produce-0") to new format
+// that includes the item name (e.g. "week1-Fresh Produce-0-Bell peppers")
+function migrateShopKeys() {
+  let changed = false;
+  ['week1', 'week2', 'infrastructure', 'spices'].forEach(listKey => {
+    const stateKey = `shop-${listKey}`;
+    const shopState = state[stateKey];
+    if (!shopState) return;
+    const list = SHOPPING[listKey];
+    if (!list) return;
+
+    Object.keys(shopState).forEach(oldKey => {
+      // Check if key is in old format (ends with a number, no item name)
+      const match = oldKey.match(/^(.+)-(\d+)$/);
+      if (!match) return;
+      const category = match[1].replace(`${listKey}-`, '');
+      const idx = parseInt(match[2]);
+      if (!list[category] || !list[category][idx]) return;
+      const item = list[category][idx];
+      const newKey = `${listKey}-${category}-${idx}-${item.item}`;
+      if (oldKey !== newKey && !(newKey in shopState)) {
+        shopState[newKey] = shopState[oldKey];
+        delete shopState[oldKey];
+        changed = true;
+      }
+    });
+  });
+  if (changed) saveState();
+}
+
 function getDayState(day) {
   const key = `day-${day}`;
-  if (!state[key]) state[key] = { essentials: {}, prep: {}, journal: {}, notes: '', meals: {} };
+  if (!state[key]) state[key] = { essentials: {}, prep: {}, journal: {}, notes: '', meals: {}, weight: null };
+  if (!('weight' in state[key])) state[key].weight = null;
   return state[key];
+}
+
+// --- SETTINGS / CUSTOM HABITS ---
+function getSettings() {
+  if (!state.settings) state.settings = { weightUnit: 'lbs' };
+  if (!state.settings.weightUnit) state.settings.weightUnit = 'lbs';
+  return state.settings;
+}
+
+function getCustomHabits() {
+  if (!state.customHabits) state.customHabits = [];
+  return state.customHabits;
+}
+
+function getAllEssentials() {
+  // Returns combined list: built-in DAILY_ESSENTIALS + user's custom habits
+  const custom = getCustomHabits().map(h => ({
+    id: h.id,
+    text: h.text,
+    custom: true
+  }));
+  return [...DAILY_ESSENTIALS, ...custom];
 }
 
 function getShopState(listKey) {
@@ -82,7 +135,7 @@ function initDayNav() {
     pip.dataset.day = d;
 
     const ds = getDayState(d);
-    const hasData = ds.notes || Object.keys(ds.journal).some(k => ds.journal[k]) || Object.keys(ds.essentials).length > 0;
+    const hasData = ds.notes || Object.keys(ds.journal).some(k => ds.journal[k]) || Object.keys(ds.essentials).length > 0 || ds.weight != null;
     if (hasData) pip.classList.add('has-data');
     if (d === currentDay) pip.classList.add('current');
 
@@ -130,8 +183,9 @@ function renderDayView() {
   document.getElementById('day-date').textContent = formatDate(dateObj);
 
   // Progress bar
-  const essentialsDone = DAILY_ESSENTIALS.filter(e => ds.essentials[e.id]).length;
-  const pct = Math.round((essentialsDone / DAILY_ESSENTIALS.length) * 100);
+  const allEss = getAllEssentials();
+  const essentialsDone = allEss.filter(e => ds.essentials[e.id]).length;
+  const pct = allEss.length > 0 ? Math.round((essentialsDone / allEss.length) * 100) : 0;
   document.querySelector('#day-progress-bar .progress-fill').style.width = pct + '%';
 
   // Nav buttons
@@ -151,6 +205,9 @@ function renderDayView() {
 
   // Meals
   renderMeals();
+
+  // Weight
+  renderWeight();
 
   // Journal
   renderJournal();
@@ -212,27 +269,104 @@ function renderEssentials() {
   const container = document.getElementById('daily-essentials');
   container.innerHTML = '';
   const ds = getDayState(currentDay);
+  const allEss = getAllEssentials();
 
-  DAILY_ESSENTIALS.forEach(ess => {
+  allEss.forEach(ess => {
     const checked = ds.essentials[ess.id] || false;
     const item = document.createElement('div');
-    item.className = 'checklist-item' + (checked ? ' done' : '');
+    item.className = 'checklist-item' + (checked ? ' done' : '') + (ess.custom ? ' custom-habit-item' : '');
     item.innerHTML = `
       <input type="checkbox" id="ess-${ess.id}" ${checked ? 'checked' : ''}>
-      <label for="ess-${ess.id}">${ess.text}</label>
+      <label for="ess-${ess.id}">${escapeHtml(ess.text)}</label>
     `;
     item.querySelector('input').addEventListener('change', (e) => {
       ds.essentials[ess.id] = e.target.checked;
       item.classList.toggle('done', e.target.checked);
       saveState();
       // Update progress bar
-      const done = DAILY_ESSENTIALS.filter(e2 => ds.essentials[e2.id]).length;
+      const list = getAllEssentials();
+      const done = list.filter(e2 => ds.essentials[e2.id]).length;
       document.querySelector('#day-progress-bar .progress-fill').style.width =
-        Math.round((done / DAILY_ESSENTIALS.length) * 100) + '%';
+        (list.length > 0 ? Math.round((done / list.length) * 100) : 0) + '%';
       initDayNav();
     });
     container.appendChild(item);
   });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// --- WEIGHT TRACKER ---
+function renderWeight() {
+  const ds = getDayState(currentDay);
+  const settings = getSettings();
+  const input = document.getElementById('weight-input');
+  const unitLabel = document.getElementById('weight-unit-label');
+  const deltaEl = document.getElementById('weight-delta');
+  const clearBtn = document.getElementById('weight-clear');
+
+  unitLabel.textContent = settings.weightUnit;
+  input.value = ds.weight != null ? ds.weight : '';
+
+  const updateDelta = () => {
+    const entries = getWeightEntries();
+    if (entries.length === 0 || ds.weight == null) {
+      deltaEl.innerHTML = '';
+      return;
+    }
+    // Find the starting weight (earliest entry) and previous entry
+    const first = entries[0];
+    const prior = entries.filter(e => e.day < currentDay).pop();
+    let parts = [];
+    if (first && first.day !== currentDay) {
+      const d = (ds.weight - first.value).toFixed(1);
+      const cls = d < 0 ? 'delta-down' : d > 0 ? 'delta-up' : 'delta-same';
+      const sign = d > 0 ? '+' : '';
+      parts.push(`<span class="${cls}">${sign}${d} ${settings.weightUnit}</span> since start (Day ${first.day})`);
+    }
+    if (prior) {
+      const d = (ds.weight - prior.value).toFixed(1);
+      const cls = d < 0 ? 'delta-down' : d > 0 ? 'delta-up' : 'delta-same';
+      const sign = d > 0 ? '+' : '';
+      parts.push(`<span class="${cls}">${sign}${d}</span> from Day ${prior.day}`);
+    }
+    deltaEl.innerHTML = parts.join(' &middot; ');
+  };
+
+  input.oninput = () => {
+    const v = input.value.trim();
+    ds.weight = v === '' ? null : parseFloat(v);
+    if (isNaN(ds.weight)) ds.weight = null;
+    saveState();
+    updateDelta();
+    initDayNav();
+  };
+
+  clearBtn.onclick = () => {
+    input.value = '';
+    ds.weight = null;
+    saveState();
+    updateDelta();
+    initDayNav();
+  };
+
+  updateDelta();
+}
+
+function getWeightEntries() {
+  // Returns sorted array of {day, value} for all days with a weight logged
+  const entries = [];
+  for (let d = -3; d <= 15; d++) {
+    const ds = getDayState(d);
+    if (ds.weight != null && !isNaN(ds.weight)) {
+      entries.push({ day: d, value: Number(ds.weight) });
+    }
+  }
+  return entries.sort((a, b) => a.day - b.day);
 }
 
 function renderMeals() {
@@ -405,7 +539,7 @@ function renderShoppingList(listKey) {
     list[category].forEach((item, i) => {
       if (activeTrip !== 'all' && item.trip && String(item.trip) !== activeTrip) return;
       visibleCount++;
-      const id = `${listKey}-${category}-${i}`;
+      const id = `${listKey}-${category}-${i}-${item.item}`;
       const bought = shopState[id] || false;
       const row = document.createElement('div');
       row.className = 'shop-item' + (bought ? ' bought' : '');
@@ -562,12 +696,13 @@ function renderProgress() {
   let totalEssentialsPossible = 0;
   let daysWithJournal = 0;
   let daysWithNotes = 0;
+  const allEss = getAllEssentials();
 
   for (let d = 1; d <= 14; d++) {
     const ds = getDayState(d);
-    const done = DAILY_ESSENTIALS.filter(e => ds.essentials[e.id]).length;
+    const done = allEss.filter(e => ds.essentials[e.id]).length;
     totalEssentialsDone += done;
-    totalEssentialsPossible += DAILY_ESSENTIALS.length;
+    totalEssentialsPossible += allEss.length;
     const hasJournal = Object.keys(ds.journal).some(k => ds.journal[k]);
     if (hasJournal) daysWithJournal++;
     if (ds.notes) daysWithNotes++;
@@ -594,9 +729,9 @@ function renderProgress() {
   let gridHtml = '<div class="progress-grid">';
   for (let d = 1; d <= 14; d++) {
     const ds = getDayState(d);
-    const done = DAILY_ESSENTIALS.filter(e => ds.essentials[e.id]).length;
-    const pct = Math.round((done / DAILY_ESSENTIALS.length) * 100);
-    const hasEntries = done > 0 || Object.keys(ds.journal).some(k => ds.journal[k]) || ds.notes;
+    const done = allEss.filter(e => ds.essentials[e.id]).length;
+    const pct = allEss.length > 0 ? Math.round((done / allEss.length) * 100) : 0;
+    const hasEntries = done > 0 || Object.keys(ds.journal).some(k => ds.journal[k]) || ds.notes || ds.weight != null;
     gridHtml += `
       <div class="progress-day ${hasEntries ? 'has-entries' : ''}" style="cursor:pointer" data-goto="${d}">
         <div class="p-day-num">Day ${d}</div>
@@ -606,12 +741,104 @@ function renderProgress() {
   }
   gridHtml += '</div>';
 
-  container.innerHTML = statsHtml + gridHtml;
+  container.innerHTML = statsHtml + gridHtml + renderWeightChartHtml();
 
   // Click to navigate
   container.querySelectorAll('[data-goto]').forEach(el => {
     el.addEventListener('click', () => navigateToDay(parseInt(el.dataset.goto)));
   });
+}
+
+function renderWeightChartHtml() {
+  const entries = getWeightEntries();
+  const settings = getSettings();
+  const unit = settings.weightUnit;
+
+  let body;
+  let summary = '';
+
+  if (entries.length === 0) {
+    body = `<div class="weight-chart-empty">No weight entries yet. Log your morning weigh-in on the Today view to see a chart here.</div>`;
+  } else if (entries.length === 1) {
+    body = `<div class="weight-chart-empty">One entry so far: <strong>${entries[0].value} ${unit}</strong> on Day ${entries[0].day}. Log another day to see your trend.</div>`;
+  } else {
+    // Build SVG
+    const W = 600, H = 220, padL = 44, padR = 16, padT = 12, padB = 32;
+    const innerW = W - padL - padR;
+    const innerH = H - padT - padB;
+
+    const dayMin = -3, dayMax = 15;
+    const xForDay = d => padL + ((d - dayMin) / (dayMax - dayMin)) * innerW;
+
+    const values = entries.map(e => e.value);
+    let vMin = Math.min(...values);
+    let vMax = Math.max(...values);
+    if (vMin === vMax) { vMin -= 1; vMax += 1; }
+    const pad = (vMax - vMin) * 0.15;
+    vMin -= pad; vMax += pad;
+    const yForVal = v => padT + innerH - ((v - vMin) / (vMax - vMin)) * innerH;
+
+    // Gridlines + Y-axis labels (5 steps)
+    let grid = '';
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const v = vMin + (vMax - vMin) * (i / steps);
+      const y = yForVal(v);
+      grid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#eee" stroke-width="1"/>`;
+      grid += `<text x="${padL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">${v.toFixed(1)}</text>`;
+    }
+
+    // X-axis day labels (every 3 days + endpoints)
+    let xLabels = '';
+    const labelDays = [-3, 1, 4, 7, 10, 14, 15];
+    labelDays.forEach(d => {
+      const x = xForDay(d);
+      const lbl = d <= 0 ? `P${Math.abs(d) + 1}` : String(d);
+      xLabels += `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" font-size="10" fill="#666">${lbl}</text>`;
+    });
+
+    // Vertical highlight line at Day 1 (program start)
+    const startX = xForDay(1);
+    grid += `<line x1="${startX}" y1="${padT}" x2="${startX}" y2="${H - padB}" stroke="#2e7d32" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>`;
+
+    // Path + points
+    const path = entries.map((e, i) => `${i === 0 ? 'M' : 'L'}${xForDay(e.day)},${yForVal(e.value)}`).join(' ');
+    const points = entries.map(e =>
+      `<circle cx="${xForDay(e.day)}" cy="${yForVal(e.value)}" r="4" fill="#2e7d32" stroke="white" stroke-width="2">
+        <title>Day ${e.day}: ${e.value} ${unit}</title>
+      </circle>`
+    ).join('');
+
+    const svg = `
+      <svg class="weight-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        ${grid}
+        ${xLabels}
+        <path d="${path}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-linejoin="round"/>
+        ${points}
+      </svg>
+    `;
+
+    const first = entries[0];
+    const last = entries[entries.length - 1];
+    const delta = (last.value - first.value).toFixed(1);
+    const deltaSign = delta > 0 ? '+' : '';
+    summary = `
+      <div class="weight-chart-summary">
+        <span class="chip">Start: ${first.value} ${unit} (Day ${first.day})</span>
+        <span class="chip">Latest: ${last.value} ${unit} (Day ${last.day})</span>
+        <span class="chip">Change: ${deltaSign}${delta} ${unit}</span>
+      </div>
+    `;
+
+    body = svg + summary;
+  }
+
+  return `
+    <div class="weight-chart-card">
+      <h3>Weight Trend</h3>
+      ${body}
+    </div>
+  `;
 }
 
 // --- EXPORT / RESET ---
@@ -639,6 +866,101 @@ function initExportReset() {
   });
 }
 
+// --- SETTINGS MODAL ---
+function initSettings() {
+  const modal = document.getElementById('settings-modal');
+  const openBtn = document.getElementById('settings-btn');
+  const closeBtn = document.getElementById('settings-close');
+  const backdrop = modal.querySelector('.modal-backdrop');
+  const form = document.getElementById('add-habit-form');
+  const input = document.getElementById('new-habit-input');
+
+  const open = () => {
+    renderCustomHabits();
+    syncUnitRadios();
+    modal.classList.remove('hidden');
+    setTimeout(() => input.focus(), 50);
+  };
+  const close = () => {
+    modal.classList.add('hidden');
+  };
+
+  openBtn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  backdrop.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    const habits = getCustomHabits();
+    habits.push({
+      id: 'custom-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      text
+    });
+    saveState();
+    input.value = '';
+    renderCustomHabits();
+    // Also refresh the current day view so the new habit shows up immediately
+    if (currentView === 'day-view') renderEssentials();
+    renderDayView();
+  });
+
+  // Weight unit radios
+  document.querySelectorAll('input[name="weight-unit"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        getSettings().weightUnit = e.target.value;
+        saveState();
+        renderWeight();
+        if (currentView === 'progress-view') renderProgress();
+      }
+    });
+  });
+}
+
+function syncUnitRadios() {
+  const unit = getSettings().weightUnit;
+  document.querySelectorAll('input[name="weight-unit"]').forEach(r => {
+    r.checked = (r.value === unit);
+  });
+}
+
+function renderCustomHabits() {
+  const container = document.getElementById('custom-habits-list');
+  const habits = getCustomHabits();
+  container.innerHTML = '';
+
+  if (habits.length === 0) {
+    container.innerHTML = '<div class="custom-habits-empty">No custom habits yet. Add one below.</div>';
+    return;
+  }
+
+  habits.forEach((habit, i) => {
+    const row = document.createElement('div');
+    row.className = 'custom-habit-row';
+    row.innerHTML = `
+      <span class="habit-text">${escapeHtml(habit.text)}</span>
+      <button class="habit-delete" data-idx="${i}" title="Delete" aria-label="Delete habit">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    `;
+    row.querySelector('.habit-delete').addEventListener('click', () => {
+      if (confirm(`Remove "${habit.text}" from your daily habits? (Existing check-ins will remain in your history.)`)) {
+        habits.splice(i, 1);
+        saveState();
+        renderCustomHabits();
+        if (currentView === 'day-view') renderEssentials();
+        renderDayView();
+      }
+    });
+    container.appendChild(row);
+  });
+}
+
 // --- TOP NAV ---
 function initTopNav() {
   document.querySelectorAll('.tnav-btn').forEach(btn => {
@@ -656,6 +978,7 @@ function initTopNav() {
 
 // --- INIT ---
 function init() {
+  migrateShopKeys();
   initDayNav();
   renderDayView();
   initShoppingView();
@@ -664,6 +987,7 @@ function init() {
   renderProgress();
   initExportReset();
   initTopNav();
+  initSettings();
 }
 
 document.addEventListener('DOMContentLoaded', init);

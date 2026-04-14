@@ -12,6 +12,9 @@
     <div class="header-top">
       <h1>Jumpstart Tracker</h1>
       <span class="subtitle">15-Day WFPB Program</span>
+      <button id="settings-btn" class="settings-btn" title="Settings" aria-label="Open settings">
+        <i class="fa-solid fa-gear"></i>
+      </button>
     </div>
     <nav class="top-nav">
       <button class="tnav-btn active" data-view="day-view">
@@ -61,6 +64,19 @@
       <div id="prep-section" class="card hidden">
         <h3>Prep Tasks</h3>
         <div id="prep-tasks" class="checklist"></div>
+      </div>
+
+      <!-- Morning Weigh-In -->
+      <div class="card weight-card">
+        <h3>Morning Weigh-In</h3>
+        <div class="weight-row">
+          <input type="number" id="weight-input" step="0.1" min="0" placeholder="Weight" inputmode="decimal">
+          <span class="weight-unit" id="weight-unit-label">lbs</span>
+          <button id="weight-clear" class="weight-clear-btn" title="Clear weight" aria-label="Clear weight">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="weight-delta" class="weight-delta"></div>
       </div>
 
       <!-- Meals -->
@@ -159,6 +175,38 @@
     </section>
   </main>
 
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2 id="settings-title">Settings</h2>
+        <button id="settings-close" class="modal-close" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <section class="settings-section">
+          <h3>Custom Daily Habits</h3>
+          <p class="settings-hint">Add supplements, exercise, meditation, or any daily habit you want to track alongside the WFPB essentials.</p>
+          <div id="custom-habits-list" class="custom-habits-list"></div>
+          <form id="add-habit-form" class="add-habit-form">
+            <input type="text" id="new-habit-input" placeholder="e.g. B12 supplement, 10-min walk" maxlength="80" required>
+            <button type="submit" class="btn">Add</button>
+          </form>
+        </section>
+
+        <section class="settings-section">
+          <h3>Weight Units</h3>
+          <div class="unit-toggle">
+            <label><input type="radio" name="weight-unit" value="lbs"> Pounds (lbs)</label>
+            <label><input type="radio" name="weight-unit" value="kg"> Kilograms (kg)</label>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <script src="data.js"></script>
   <script src="app.js"></script>
